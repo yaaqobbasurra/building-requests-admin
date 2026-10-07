@@ -28,7 +28,6 @@
   }
   .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
 
-  /* Top bar */
   .topbar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
     padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 16px;
@@ -48,7 +47,6 @@
   }
   button:disabled { opacity: .5; cursor: not-allowed; }
 
-  /* Filters */
   .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
   .filters input, .filters select {
     font: inherit; background: var(--card); color: var(--text);
@@ -60,7 +58,6 @@
   .status-msg { color: var(--muted); padding: 24px 0; text-align: center; }
   .status-msg.error { color: var(--declined); }
 
-  /* Cards */
   #list { display: grid; gap: 12px; }
   .card {
     background: var(--card); border: 1px solid var(--line);
@@ -136,7 +133,7 @@
 
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOXCf2pBxuN5CtJSWbPg99A3KBIycyI0enuw9ukqYeEkD96qL-bmnfHLv2TIBsYrnn/exec";
-
+const FRIED = "yk8Jp2Nq7rXw4vB9cD1fGh3Lm5Ts6Uw";
 let rows = [];
 
 const $list = document.getElementById("list");
@@ -168,16 +165,23 @@ async function load() {
   $list.innerHTML = "";
   $refresh.disabled = true;
   try {
-    const res = await fetch(SCRIPT_URL);
+    const url = SCRIPT_URL + "?FRIED=" + encodeURIComponent(FRIED);
+    const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error("Server returned: " + text.slice(0, 80));
+    }
     if (!Array.isArray(data)) throw new Error("Response was not a JSON array");
     rows = data;
     showMsg("");
     render();
   } catch (err) {
     rows = [];
-    showMsg("Could not load requests: " + err.message + ". Check SCRIPT_URL and try Refresh.", true);
+    showMsg("Could not load requests: " + err.message, true);
   } finally {
     $refresh.disabled = false;
   }
@@ -284,14 +288,18 @@ function openDeclineForm(card, btns, r) {
 }
 
 async function updateStatus(r, status, reason) {
-  const params = { action: "updateStatus", rowIndex: r.rowIndex, status };
+  const params = {
+    action: "updateStatus",
+    rowIndex: r.rowIndex,
+    status: status,
+    FRIED: FRIED
+  };
   if (reason !== undefined) params.reason = reason;
   try {
-    // no-cors: the response is opaque, so we assume success if the request was sent
     await fetch(SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" },
       body: new URLSearchParams(params).toString()
     });
     r.status = status;
