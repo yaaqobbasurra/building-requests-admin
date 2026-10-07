@@ -134,6 +134,7 @@
 <script>
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOXCf2pBxuN5CtJSWbPg99A3KBIycyI0enuw9ukqYeEkD96qL-bmnfHLv2TIBsYrnn/exec";
 const FRIED = "yk8Jp2Nq7rXw4vB9cD1fGh3Lm5Ts6Uw";
+  let cache = { data: null, time: 0 };
 let rows = [];
 
 const $list = document.getElementById("list");
@@ -160,28 +161,33 @@ function showMsg(text, isError) {
   $msg.hidden = !text;
 }
 
-async function load() {
+async function load(force) {
+  const now = Date.now();
+  if (!force && cache.data && now - cache.time < 30000) {
+    rows = cache.data;
+    showMsg("");
+    render();
+    return;
+  }
   showMsg("Loading requests…");
   $list.innerHTML = "";
   $refresh.disabled = true;
   try {
     const url = SCRIPT_URL + "?FRIED=" + encodeURIComponent(FRIED);
     const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
     const text = await res.text();
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      throw new Error("Server returned: " + text.slice(0, 80));
-    }
-    if (!Array.isArray(data)) throw new Error("Response was not a JSON array");
+    try { data = JSON.parse(text); }
+    catch (e) { throw new Error("Server said: " + text.slice(0, 200)); }
+    if (!Array.isArray(data)) throw new Error("Server did not return an array.");
     rows = data;
+    cache.data = data;
+    cache.time = now;
     showMsg("");
     render();
   } catch (err) {
     rows = [];
-    showMsg("Could not load requests: " + err.message, true);
+    showMsg("Could not load requests.\n" + err.message, true);
   } finally {
     $refresh.disabled = false;
   }
@@ -313,7 +319,7 @@ async function updateStatus(r, status, reason) {
 
 $search.addEventListener("input", render);
 $filter.addEventListener("change", render);
-$refresh.addEventListener("click", load);
+$refresh.addEventListener("click", () => load(true));
 document.getElementById("logoutBtn").addEventListener("click", () => {
   window.location.href = "/cdn-cgi/access/logout";
 });
