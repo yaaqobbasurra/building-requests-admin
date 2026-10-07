@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Building Request Review Panel</title>
+<style>
+  :root {
+    --bg: #14171a;
+    --card: #1e2227;
+    --grass: #5fae3f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --text: #e6e9ec;
+    --muted: #8b949e;
+    --line: #2d333a;
+    --pending: #e5b93c;
+    --approved: #5fae3f;
+    --declined: #e5534b;
+    --declined-muted: #c27a76;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 16px;
+  }
+  .topbar h1 { font-size: 1.25rem; margin: 0; flex: 1 1 260px; color: var(--grass); }
+  .user { color: var(--muted); font-size: .85rem; }
+  .topbar .actions { display: flex; gap: 8px; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    padding: 7px 14px;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--grass); outline-offset: 2px;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .filters input, .filters select {
+    font: inherit; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+  }
+  .filters input { flex: 1 1 220px; }
+  .filters select { flex: 0 0 auto; }
+
+  .status-msg { color: var(--muted); padding: 24px 0; text-align: center; }
+  .status-msg.error { color: var(--declined); }
+
+  /* Cards */
+  #list { display: grid; gap: 12px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-left: 4px solid var(--pending); border-radius: 8px; padding: 14px 16px;
+  }
+  .card.approved { border-left-color: var(--approved); }
+  .card.declined { border-left-color: var(--declined); }
+
+  .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .card-title { font-size: 1.05rem; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+
+  .badge {
+    font-size: .8rem; font-weight: 600; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap;
+  }
+  .badge.pending { color: var(--pending); background: rgba(229,185,60,.12); }
+  .badge.approved { color: var(--approved); background: rgba(95,174,63,.12); }
+  .badge.declined { color: var(--declined); background: rgba(229,83,75,.12); }
+
+  .reason { color: var(--declined-muted); font-size: .88rem; margin: 6px 0 0; text-align: right; flex-basis: 100%; overflow-wrap: anywhere; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
+  .stats b { color: var(--text); font-family: var(--mono); font-weight: 500; }
+  .stats .t { font-family: var(--mono); }
+
+  .notes { margin: 10px 0 0; font-size: .9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .submitted { margin: 8px 0 0; font-size: .75rem; color: var(--muted); font-family: var(--mono); }
+
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-approve { background: var(--grass); border-color: var(--grass); color: #0d1a08; font-weight: 600; }
+  .btn-approve:hover { filter: brightness(1.1); border-color: var(--grass); }
+  .btn-decline { background: var(--declined); border-color: var(--declined); color: #fff; font-weight: 600; }
+  .btn-decline:hover { filter: brightness(1.1); border-color: var(--declined); }
+
+  .decline-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .decline-form label { flex-basis: 100%; font-size: .85rem; color: var(--muted); }
+  .decline-form input {
+    flex: 1 1 200px; font: inherit; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px;
+  }
+
+  @media (max-width: 480px) {
+    .wrap { padding: 12px; }
+    .reason { text-align: left; }
+    .btns button { flex: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <h1>Building Request Review Panel</h1>
+    <span class="user">Logged in as: user@example.com</span>
+    <div class="actions">
+      <button id="refreshBtn" type="button">Refresh</button>
+      <button id="logoutBtn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <div class="filters">
+    <input id="search" type="search" placeholder="Search by builder name" aria-label="Search by builder name">
+    <select id="statusFilter" aria-label="Filter by status">
+      <option value="all">All</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="declined">Declined</option>
+    </select>
+  </div>
+
+  <div id="msg" class="status-msg" hidden></div>
+  <div id="list"></div>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOXCf2pBxuN5CtJSWbPg99A3KBIycyI0enuw9ukqYeEkD96qL-bmnfHLv2TIBsYrnn/exec";
+
+let rows = [];
+
+const $list = document.getElementById("list");
+const $msg = document.getElementById("msg");
+const $search = document.getElementById("search");
+const $filter = document.getElementById("statusFilter");
+const $refresh = document.getElementById("refreshBtn");
+
+function normStatus(s) {
+  const v = String(s || "").trim().toLowerCase();
+  if (v === "approved") return "approved";
+  if (v === "declined") return "declined";
+  return "pending";
+}
+function label(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function isYes(v) {
+  return ["yes", "true", "y", "1"].includes(String(v).trim().toLowerCase());
+}
+
+function showMsg(text, isError) {
+  $msg.textContent = text;
+  $msg.className = "status-msg" + (isError ? " error" : "");
+  $msg.hidden = !text;
+}
+
+async function load() {
+  showMsg("Loading requests…");
+  $list.innerHTML = "";
+  $refresh.disabled = true;
+  try {
+    const res = await fetch(SCRIPT_URL);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error("Response was not a JSON array");
+    rows = data;
+    showMsg("");
+    render();
+  } catch (err) {
+    rows = [];
+    showMsg("Could not load requests: " + err.message + ". Check SCRIPT_URL and try Refresh.", true);
+  } finally {
+    $refresh.disabled = false;
+  }
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function stat(labelText, valueText) {
+  const s = el("span");
+  s.append(labelText + " ", Object.assign(el("b"), { textContent: valueText }));
+  return s;
+}
+
+function render() {
+  const q = $search.value.trim().toLowerCase();
+  const f = $filter.value;
+  const visible = rows.filter(r => {
+    const st = normStatus(r.status);
+    if (f !== "all" && st !== f) return false;
+    if (q && !String(r.builderName || "").toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  $list.innerHTML = "";
+  if (!visible.length) {
+    if (!$msg.classList.contains("error")) {
+      showMsg(rows.length ? "No requests match your filters." : "No requests yet.");
+    }
+    return;
+  }
+  if (!$msg.classList.contains("error")) showMsg("");
+
+  visible.forEach(r => $list.appendChild(buildCard(r)));
+}
+
+function buildCard(r) {
+  const st = normStatus(r.status);
+  const card = el("article", "card " + st);
+
+  const head = el("div", "card-head");
+  head.appendChild(el("h2", "card-title", (r.builderName || "Unknown") + " — " + (r.buildingName || "Untitled")));
+  head.appendChild(el("span", "badge " + st, label(st)));
+  if (st === "declined" && String(r.reason || "").trim()) {
+    head.appendChild(el("p", "reason", r.reason));
+  }
+  card.appendChild(head);
+
+  const stats = el("div", "stats");
+  stats.appendChild(stat("X/Z", r.x + " / " + r.z));
+  stats.appendChild(stat("From spawn", String(r.distanceFromSpawn)));
+  stats.appendChild(stat("Size", r.width + "×" + r.length));
+  const comm = el("span");
+  comm.append("Commercial ", Object.assign(el("b"), { textContent: isYes(r.commercial) ? "Yes" : "No" }));
+  stats.appendChild(comm);
+  card.appendChild(stats);
+
+  if (String(r.notes || "").trim()) card.appendChild(el("p", "notes", r.notes));
+  if (r.submittedAt) card.appendChild(el("p", "submitted", "Submitted " + r.submittedAt));
+
+  if (st === "pending") {
+    const btns = el("div", "btns");
+    const approve = el("button", "btn-approve", "Approve");
+    const decline = el("button", "btn-decline", "Decline");
+    approve.type = decline.type = "button";
+    approve.addEventListener("click", () => {
+      approve.disabled = decline.disabled = true;
+      updateStatus(r, "Approved");
+    });
+    decline.addEventListener("click", () => openDeclineForm(card, btns, r));
+    btns.append(approve, decline);
+    card.appendChild(btns);
+  }
+  return card;
+}
+
+function openDeclineForm(card, btns, r) {
+  btns.hidden = true;
+  const form = el("div", "decline-form");
+  const lab = el("label", "", "Reason for declining?");
+  const input = el("input");
+  input.type = "text";
+  input.maxLength = 300;
+  input.id = "reason-" + r.rowIndex;
+  lab.htmlFor = input.id;
+  const confirm = el("button", "btn-decline", "Confirm");
+  const cancel = el("button", "", "Cancel");
+  confirm.type = cancel.type = "button";
+
+  confirm.addEventListener("click", () => {
+    confirm.disabled = cancel.disabled = true;
+    updateStatus(r, "Declined", input.value.trim());
+  });
+  cancel.addEventListener("click", () => { form.remove(); btns.hidden = false; });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") confirm.click(); });
+
+  form.append(lab, input, confirm, cancel);
+  card.appendChild(form);
+  input.focus();
+}
+
+async function updateStatus(r, status, reason) {
+  const params = { action: "updateStatus", rowIndex: r.rowIndex, status };
+  if (reason !== undefined) params.reason = reason;
+  try {
+    // no-cors: the response is opaque, so we assume success if the request was sent
+    await fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString()
+    });
+    r.status = status;
+    if (reason !== undefined) r.reason = reason;
+    render();
+  } catch (err) {
+    showMsg("Could not update request: " + err.message, true);
+    render();
+  }
+}
+
+$search.addEventListener("input", render);
+$filter.addEventListener("change", render);
+$refresh.addEventListener("click", load);
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  window.location.href = "/cdn-cgi/access/logout";
+});
+
+load();
+</script>
+</body>
+</html>
