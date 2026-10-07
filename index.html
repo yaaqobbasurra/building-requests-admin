@@ -179,11 +179,17 @@ function showSpinner(text) {
   $msg.hidden = false;
 }
 
+function clearMsg() {
+  $msg.textContent = "";
+  $msg.className = "status-msg";
+  $msg.hidden = true;
+}
+
 async function load(force) {
   const now = Date.now();
   if (!force && cache.data && now - cache.time < 30000) {
     rows = cache.data;
-    showMsg("");
+    clearMsg();
     render();
     return;
   }
@@ -201,7 +207,7 @@ async function load(force) {
     rows = data;
     cache.data = data;
     cache.time = now;
-    showMsg("");
+    clearMsg();
     render();
   } catch (err) {
     rows = [];
@@ -241,7 +247,7 @@ function render() {
     }
     return;
   }
-  if (!$msg.classList.contains("error")) showMsg("");
+  if (!$msg.classList.contains("error")) clearMsg();
 
   visible.forEach(r => $list.appendChild(buildCard(r)));
 }
@@ -328,7 +334,6 @@ async function updateStatus(r, status, reason) {
     });
     r.status = status;
     if (reason !== undefined) r.reason = reason;
-    // Invalidate cache so next load() gets fresh data
     cache.data = null;
     cache.time = 0;
     render();
