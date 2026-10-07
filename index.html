@@ -104,6 +104,19 @@
     .reason { text-align: left; }
     .btns button { flex: 1; }
   }
+  <style>
+  :root {
+    --bg: #14171a;
+    ...
+  }
+  * { box-sizing: border-box; }
+  body { ... }
+  ...
+  @media (max-width: 480px) {
+    .wrap { padding: 12px; }
+    .reason { text-align: left; }
+    .btns button { flex: 1; }
+  }
 </style>
 </head>
 <body>
@@ -169,7 +182,9 @@ async function load(force) {
     render();
     return;
   }
-  showMsg("Loading requests…");
+  $msg.innerHTML = '<span class="spinner"></span>Loading requests…';
+$msg.className = "status-msg";
+$msg.hidden = false;
   $list.innerHTML = "";
   $refresh.disabled = true;
   try {
